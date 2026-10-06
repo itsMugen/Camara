@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Images CDN Design · Details</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --paper: #f4f6f9;
+  --sheet: #ffffff;
+  --ink: #17202d;
+  --muted: #5b6679;
+  --line: #c6cfdc;
+  --chip: #edf1f7;
+  --accent: #2747b5;
+  --sync: #9a5f0c;
+  --ok: #2c7653;
+  --warn: #a33a2a;
+  --wan: #6b3fa0;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f131a; --sheet: #161c26; --ink: #e5e9f0; --muted: #98a3b5; --line: #344156;
+    --chip: #202938; --accent: #8aa3ff; --sync: #e2a750; --ok: #62c497; --warn: #f0826f; --wan: #c39bf0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f131a; --sheet: #161c26; --ink: #e5e9f0; --muted: #98a3b5; --line: #344156;
+  --chip: #202938; --accent: #8aa3ff; --sync: #e2a750; --ok: #62c497; --warn: #f0826f; --wan: #c39bf0;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15.5px/1.6 var(--font-body);
+  padding: 32px 16px 64px;
+}
+.wrap { max-width: 980px; margin-inline: auto; display: grid; gap: 36px; }
+
+header { border-bottom: 2px solid var(--ink); padding-bottom: 16px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+h1 { font: 600 clamp(30px, 4.4vw, 44px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 12px 0 0; color: var(--muted); max-width: 68ch; font-size: 16.5px; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 16px; }
+nav.toc a { font: 500 12.5px/1 var(--font-mono); color: var(--ink); text-decoration: none; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+section { display: grid; gap: 14px; scroll-margin-top: 16px; }
+h3[id], h2[id] { scroll-margin-top: 16px; }
+h2 { font: 600 24px/1.2 var(--font-display); margin: 0; }
+h2 .n { font: 500 13px/1 var(--font-mono); color: var(--muted); margin-right: 10px; vertical-align: 3px; }
+h3 { font: 600 17px/1.3 var(--font-display); margin: 6px 0 0; }
+p { margin: 0; max-width: 72ch; }
+.muted { color: var(--muted); }
+code { font: 13px var(--font-mono); background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+strong { font-weight: 600; }
+
+.card { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-width: 0; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .grid3, .grid2 { grid-template-columns: 1fr; } }
+
+.tag { font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.req { display: grid; gap: 6px; align-content: start; }
+.req .ask { font-weight: 600; }
+.req .how { color: var(--muted); font-size: 14.5px; }
+
+.callout { border-left: 4px solid var(--accent); background: var(--sheet); padding: 14px 18px; border-radius: 0 8px 8px 0; }
+.callout.sync { border-left-color: var(--sync); }
+.callout.ok { border-left-color: var(--ok); }
+.callout p + p { margin-top: 8px; }
+
+ul, ol { margin: 0; padding-left: 20px; max-width: 72ch; }
+li + li { margin-top: 4px; }
+
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 13px/1.3 var(--font-display); letter-spacing: .02em; background: var(--chip); }
+td.k { font-weight: 600; white-space: nowrap; }
+th.base, td.base { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.num { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; }
+
+details { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; }
+details > summary { cursor: pointer; list-style: none; padding: 12px 16px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+"; font: 500 15px/1 var(--font-mono); color: var(--accent); width: 12px; flex: none; }
+details[open] > summary::before { content: "\2212"; }
+details > summary .hint { font: 400 13px var(--font-mono); color: var(--muted); margin-left: auto; white-space: nowrap; }
+details > .body { padding: 2px 18px 18px 38px; display: grid; gap: 12px; }
+details > .body .tablewrap { margin-left: -20px; }
+@media (max-width: 760px) { details > summary .hint { display: none; } details > .body { padding-left: 18px; } details > .body .tablewrap { margin-left: 0; } }
+
+pre { margin: 0; font: 12.5px/1.55 var(--font-mono); background: var(--chip); border-radius: 6px; padding: 12px 14px; overflow-x: auto; }
+
+.diagram { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+svg text { font-family: var(--font-body); fill: var(--ink); }
+svg .t-b { font: 600 14px var(--font-display); }
+svg .t-s { font-size: 11.5px; fill: var(--muted); }
+svg .t-m { font: 11px var(--font-mono); fill: var(--muted); }
+svg .box { fill: var(--sheet); stroke: var(--line); stroke-width: 1.2; }
+svg .node { fill: var(--chip); stroke: var(--ink); stroke-width: 1.4; }
+svg .part { fill: var(--sheet); stroke: var(--line); stroke-width: 1; }
+svg .req { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+svg .peer { stroke: var(--sync); stroke-width: 1.8; fill: none; stroke-dasharray: 6 4; }
+svg .ah-req { fill: var(--accent); }
+svg .ah-peer { fill: var(--sync); }
+svg .wan { stroke: var(--wan); stroke-width: 2.2; fill: none; stroke-dasharray: 2 4; stroke-linecap: round; }
+svg .ah-wan { fill: var(--wan); }
+svg .site { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.callout.wan { border-left-color: var(--wan); }
+svg .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 4; }
+svg .resp { stroke: var(--ok); stroke-width: 1.6; fill: none; stroke-dasharray: 5 3; }
+svg .ah-resp { fill: var(--ok); }
+svg .note { fill: var(--chip); stroke: var(--line); stroke-width: 1; }
+.card .diagram + h3, .card h3 + .diagram { margin-top: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; font: 12px/1.4 var(--font-mono); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 28px; border-top: 2px solid; }
+
+.steps { counter-reset: s; list-style: none; padding: 0; display: grid; gap: 8px; }
+.steps li { counter-increment: s; position: relative; padding-left: 32px; font-size: 14.5px; margin: 0; }
+.steps li::before { position: absolute; left: 0; top: 1px; content: counter(s); font: 500 12px/22px var(--font-mono); text-align: center; width: 22px; height: 22px; border-radius: 50%; background: var(--chip); border: 1px solid var(--line); }
+
+.pill { display: inline-block; font: 500 11.5px/1 var(--font-mono); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); white-space: nowrap; }
+
+h2 .hint, h3 .hint { font: 400 13px var(--font-mono); color: var(--muted); margin-left: 8px; }
+h2 .hint { vertical-align: 3px; }
+.block { display: grid; gap: 12px; background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+.block > .tablewrap { margin-inline: -18px; border-radius: 0; border-inline: 0; }
+@media (max-width: 760px) { .block > .tablewrap { margin-inline: -18px; } }
+.more { font: 500 13px/1.5 var(--font-mono); color: var(--muted); max-width: none; }
+.more a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+.more a:hover { border-bottom-color: var(--accent); }
+nav.toc a.alt { border-style: dashed; }
+.totop { position: fixed; right: 20px; bottom: 20px; z-index: 10; display: inline-flex; align-items: center; gap: 8px; font: 500 12.5px/1 var(--font-mono); color: var(--ink); text-decoration: none; background: var(--sheet); border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; box-shadow: 0 2px 10px rgb(0 0 0 / .12); transition: opacity .2s; }
+.totop:hover { border-color: var(--accent); color: var(--accent); }
+.totop[hidden] { display: none; }
+@media print { .totop { display: none; } }
+footer { border-top: 1px solid var(--line); padding-top: 14px; font: 12.5px/1.6 var(--font-mono); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header id="top">
+  <p class="eyebrow">Exercise 2 · System design · Supporting material</p>
+  <h1>Images CDN on premise: the details</h1>
+  <p class="lede">Supporting material for <a href="CDN-Design.html">CDN-Design.html</a>, which is the design itself and should be read first. §2 to §6 here expand the section of the same number there: the reasoning, the edge cases and the numbers behind each decision. §7 to §10 are deep dives that cut across the design: the ID scheme, operations, the API and the test plan.</p>
+  <nav class="toc" aria-label="Contents">
+    <a class="alt" href="CDN-Design.html">The design</a>
+    <a href="#flows">2 How it works</a>
+    <a href="#architecture">3 Architecture</a>
+    <a href="#assumptions">4 Assumptions &amp; sizing</a>
+    <a href="#failures">5 Failures &amp; traffic</a>
+    <a href="#not-built">6 Tools not used</a>
+    <a href="#ids">7 Content-addressed IDs</a>
+    <a href="#operations">8 Operations</a>
+    <a href="#api">9 API</a>
+    <a href="#testing">10 Testing</a>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section id="flows">
+  <h2><span class="n">2</span>How it works</h2>
+  <p>Expands <a href="CDN-Design.html#flows">§2 of the design</a>, whose <a href="CDN-Design.html#figure-1">figures 1–3</a> show the three flows. Each block below covers one part of them: the upload path, how the two full sites stay in sync, what a cache-only location runs, why the change feed cannot miss an image, and what happens on a read miss.</p>
+
+  <h3 id="upload">Upload <span class="hint">validation, durability, edge cases</span></h3>
+  <div class="block">
+      <ul>
+        <li><strong>Never buffered in memory:</strong> the body streams to a temp file. SHA-256 is computed while streaming, the 25 MB limit is enforced, and the format is detected from the file's first bytes against an allow-list (JPEG, PNG, WebP, AVIF, GIF), never from the client's file name.</li>
+        <li><strong>Crash-safe write:</strong> write temp file → <code>fsync</code> → insert a <em>pending</em> index row → rename into place → mark the row <em>stored</em>, which assigns its sequence number. A crash leaves nothing, a pending row without a file, or a complete file with a pending row; startup resolves both in one cheap query.</li>
+        <li><strong>Same image twice</strong> (even at both sites at once): same hash, same file name. If the index has a stored row, the bytes are not written again, but the node still runs the push and 2-copy confirmation before answering <code>200</code>, so a repeated upload never confirms an image held on one disk only. A file with only a pending row is completed the same way. Two concurrent uploads of the same bytes on one node are merged by ID: the second waits for the first.</li>
+        <li><strong>Local peers down:</strong> the confirmed copy in the other full site counts as the second copy. Uploads keep working with one node per site.</li>
+        <li><strong>Sites cut off from each other:</strong> uploads still succeed with 2 local copies. They reach the other site through the change feed when the link returns. An upload that asked for cross-site durability keeps its local copies and answers <code>503</code> with <code>Retry-After</code>; the uploader should retry the same site later rather than fail over, since the other site can do no better during a partition.</li>
+        <li><strong>Propagation target:</strong> every node in the uploader's site has the image within ~100 ms of the <code>201</code> (500 KB takes under 1 ms on a 10 GbE link). The other site has it within one round trip plus transfer time, typically under 200 ms. Measured as "time from <code>201</code> to the last node holding the image" (p50/p99).</li>
+        <li><strong>Failed push:</strong> retried 3× with backoff (100 ms, 500 ms, 2 s); a cross-site push then tries the next node in hash order (below), and anything still missing is left to the change feed. Worst case is one poll interval: a few seconds inside a site, ~30 s between sites. Meanwhile, <a href="CDN-Design.html#figure-2">figure 2 of the design</a> covers any GET.</li>
+        <li><strong>No second copy possible anywhere:</strong> <code>503</code> rather than confirm an image that exists on one disk only. The client retries, which is safe because uploads are idempotent.</li>
+      </ul>
+  </div>
+
+  <h3 id="cross-site">Sync between the full sites <span class="hint">each image crosses once</span></h3>
+  <div class="block">
+      <ul>
+        <li><strong>One node per site is responsible for each image.</strong> A hash of the image ID over the site's node list picks it, so every node agrees with no coordination and the work spreads evenly. The uploading node pushes to that node in the other site, and it alone fetches the image across sites during catch-up. It then passes the image to every other node in its site over the LAN.</li>
+        <li><strong>Why it matters:</strong> without this rule, every node in a site would pull every image across the slow link, multiplying cross-site traffic by the number of nodes per site.</li>
+        <li><strong>If the responsible node is down:</strong> the pusher, once its 3 retries fail, pushes to the next node in hash order instead. A node treats a local peer as down after two consecutive failed feed polls, and while it is down the next node in hash order also polls the other site for the IDs that hash to the absent node. Two nodes briefly disagreeing costs at most one duplicate transfer, never a miss, because the change feed catches everything regardless.</li>
+        <li><strong>A cut-off site reconnects:</strong> its responsible nodes read the other site's feeds from their saved cursors and pull what's missing. Catch-up between sites is capped so it doesn't saturate the shared link (catch-up inside a site is throttled to the live traffic of both the fetching and the serving node instead). Images that users ask for are fetched first, on demand. The other site likewise pulls the uploads the first one accepted in the meantime. Images are immutable, so there's nothing to merge or resolve.</li>
+        <li><strong>Polling cost:</strong> an empty change-feed response is a few hundred bytes. Polling the other site every 30 s is negligible traffic.</li>
+        <li><strong>Adding a node changes the hash order, so it's done in two steps.</strong> Membership is static: one versioned node list, rolled out by Ansible, and every internal request carries the sender's list version so a mismatch is logged. Step 1: the new node is added to every peer's list as a <em>feed source and push target only</em>. It starts with all cursors at 0, pulls everything from its local peers (the "disk lost" case in <a href="CDN-Design.html#failures">design §5</a>). It joins the load balancer as soon as it passes health checks and serves misses on demand like any node. Step 2: once its replication lag is zero, it is added to the responsible-node hash order. During the rollout of either step, two peers may briefly disagree about which node is responsible for an image. The result is at most one duplicate cross-site transfer per affected image, never a missed one, because the change feed catches everything regardless. Removing a node is the same two steps in reverse. Replacing a failed node is step 1 with the old name, then step 2.</li>
+      </ul>
+  </div>
+
+  <h3 id="caches">Cache-only locations <span class="hint">stock Nginx, a few settings that matter</span></h3>
+  <div class="block">
+      <pre>proxy_cache_path /cache levels=2:2 keys_zone=img:1g max_size=3500g inactive=60d;   # 1 GB of keys ≈ 8M images: matches 3.5 TB at 500 KB
+proxy_cache_lock on;                            # concurrent misses → one fetch
+proxy_cache_valid 200 206 365d;                 # never revalidated: URLs are immutable
+proxy_cache_valid 404 10s;                      # don't remember "missing" for long
+proxy_next_upstream error timeout http_503;     # nearest full site first, then the other</pre>
+      <ul>
+        <li><strong>Upstreams:</strong> both full sites, nearest first. If it is down, the cache falls back to the other one automatically.</li>
+        <li><strong>Misses for the same image are merged</strong> (<code>proxy_cache_lock</code>), so a burst of requests for a new image costs one fetch per cache, not one per user.</li>
+        <li><strong>Eviction:</strong> when the disk is full, the least recently used images go first. The cache never has to know which images exist.</li>
+        <li><strong>Restarts:</strong> the cache lives on disk, so a restart keeps it. Only a brand-new or replaced cache server starts empty and warms up from traffic.</li>
+        <li><strong>Read-only:</strong> uploads and internal endpoints are not served (<code>405</code>). Uploaders always talk to the full sites.</li>
+        <li><strong>Trust:</strong> it fetches from the full sites over TLS, so it serves exactly the bytes they verified. Optionally it can re-check the hash, since the ID is in the URL.</li>
+      </ul>
+  </div>
+
+  <h3 id="feed">Change feed <span class="hint">why it is correct</span></h3>
+  <div class="block">
+      <pre>GET /internal/changes?since=41870&amp;limit=1000
+→ { "epoch": "b2-7f3a", "items": [ {"seq":41871,"id":"ab12…","ext":"jpg","size":482113}, … ], "next": 42870 }</pre>
+      <ul>
+        <li><strong>Startup sequence:</strong>
+          <ol>
+            <li>Delete leftover temp files. Resolve every <em>pending</em> index row: file present, mark it stored and assign its sequence number; file absent, delete the row. One indexed query, not a scan of millions of files.</li>
+            <li>Start serving reads straight away: fetch-on-miss covers the gap.</li>
+            <li>Read the feed of every reachable peer in the node's own site from its saved cursor. The other site is read only if no local peer is up, or, on the next node in hash order, for the IDs of a local peer that is down. Merge the feeds and skip duplicates by ID. This is the <em>catch-up phase</em>; once the local backlog is done, the <em>steady-state loop</em> takes over: every few seconds against local peers and, on the nodes responsible for cross-site sync, every ~30 s against the other site.</li>
+            <li>Fetch the missing images <strong>newest first</strong> (most views happen in the first days after upload, <a href="#retrieval">§4</a>), spread across all peers that hold them, with parallel workers.</li>
+            <li>Throttle adaptively: full speed while the node's own traffic is low, backing off as it rises ("Fast but polite" below).</li>
+            <li>For each peer, move the cursor only up to the highest sequence number with every image below it stored and fsynced. Workers finish out of order, and this way a crash during catch-up never skips an image. With newest-first fetching, the cursor jumps forward only when the backlog is finished. A crash before then costs one re-read of the backlog's metadata: a few MB after an outage of hours, a couple of GB at M and tens of GB at L (minutes of paging, no file re-downloaded) during a full rebuild. Images already on disk are skipped by ID and never downloaded again.</li>
+          </ol>
+        </li>
+        <li><strong>No gaps:</strong> a sequence number is assigned only when the row is marked stored, after the file is in place, inside the same write transaction, and SQLite commits one write at a time. Numbers therefore appear in order, so a cursor can never skip an image that shows up later with a lower number.</li>
+        <li><strong>Any one peer is enough:</strong> each feed lists everything that peer holds, wherever the image came from. A returning node misses nothing as long as one peer it reads from was up. Duplicates are skipped by ID.</li>
+        <li><strong>Index rebuilt on a peer:</strong> the feed carries an <code>epoch</code> that changes whenever the index is rebuilt. A reader that sees a new epoch resets its cursor for that peer to 0. That costs one metadata scan; files already present are not transferred again.</li>
+        <li><strong>Fast but polite:</strong> catch-up runs at full speed while the node's own traffic is low and backs off as live traffic rises, rather than using a fixed cap. Catch-up between sites keeps a fixed cap, because that link is shared. Popular images arrive first anyway, because users ask for them. The back-off applies at both ends: the source peer also limits what it serves to catch-up based on its own live egress, because during a rebuild the empty node's traffic is mostly misses it proxies to that peer, and with 2 nodes per site the serving peer is the node that must stay fast.</li>
+        <li><strong>How quick:</strong> a one-hour outage at M is about 1,000 images (≈0.5 GB): seconds over the LAN, under a minute across sites. A replaced, empty disk copies everything from its local peers in parallel, limited by its network card: about 3 h at M (~14 TB at 10 GbE) and about 20 h at L (~220 TB at 25 GbE), at full speed; longer if it runs through peak hours. The node serves traffic throughout, with misses fetched on demand, and the site still has its other node(s). A slow rebuild costs bandwidth, not availability. This is the price of every node holding every image (<a href="#derived">§4</a>).</li>
+      </ul>
+  </div>
+
+  <h3 id="miss">Read on a miss at a full site <span class="hint">nearest first, 404 vs 503, integrity</span></h3>
+  <div class="block">
+      <ul>
+        <li><strong>Nearest first, but don't wait too long:</strong> ask the local peers. If they don't have the image, or haven't answered within ~50 ms, ask the other site's nodes in parallel; the first to start streaming is kept and the other request is cancelled, so a miss crosses the link once. The copy is verified before it is served.</li>
+        <li><strong>One budget:</strong> the whole miss has a budget of ~2 s. A node that has not answered within it counts as "didn't answer" for the rule below, so a slow local peer can delay a miss but never turn it into a wrong <code>404</code>.</li>
+        <li><strong>Integrity:</strong> the downloaded file is re-hashed before it's saved or served. A corrupt copy is discarded and fetched elsewhere. A <code>200</code> always carries the right bytes.</li>
+        <li><strong>Verify, then serve:</strong> the node downloads and checks the whole image before sending the first byte. That costs ~20 ms on the LAN, and a few hundred ms from the other site for the largest images, once per node. Streaming before verifying would be faster but could send corrupt bytes, so it was rejected.</li>
+        <li><strong>Concurrent misses for the same image</strong> are merged into one download (Go <code>singleflight</code>).</li>
+        <li><strong>Honest errors:</strong> <code>404</code> only when every node answered "don't have it". If any node didn't answer (for example the other site is cut off), <code>503</code>, because the image might be there. Errors are never cached for long: a cache keeps a <code>404</code> for 10 s, and a node's short memory of a miss is cleared the moment the image arrives by push or fetch.</li>
+        <li><strong>Junk IDs</strong> are rejected before touching disk or network (64 lowercase hex characters). Repeated misses for the same ID are remembered for a few seconds, so probing doesn't cause traffic between sites.</li>
+      </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="architecture">
+  <h2><span class="n">3</span>Architecture</h2>
+  <p>Expands <a href="CDN-Design.html#architecture">§3 of the design</a>: how users reach the nearest location, how the topology changes with the locations the company actually has, and what runs on each machine.</p>
+
+  <h3 id="routing">Routing: GeoDNS sends users to the nearest healthy location <span class="hint">failover, alternatives, site vs cache</span></h3>
+  <div class="block">
+    <p><code>cdn.example.com</code> resolves to the nearest location, full site or cache, through self-hosted authoritative DNS servers (PowerDNS with GeoIP, one at each full site). The DNS servers health-check each one and stop handing out a location that is down. With a 20 ms round trip and a new TLS connection, the network costs about <span class="num">60 ms</span> and a hit under <span class="num">10 ms</span>. From another continent the same request takes <span class="num">~450 ms</span>, which is exactly what a nearby cache removes.</p>
+      <ul>
+        <li><strong>Failover time:</strong> DNS answers carry a short TTL (60 s). When a location fails its health checks, new lookups go elsewhere within about 1–2 minutes. If a cache goes down, its region is sent to the nearest full site: slower, but everything still works. Node failures inside a full site are handled by its load balancer in seconds, so DNS only reacts to whole locations.</li>
+        <li><strong>Why not BGP anycast:</strong> anycast fails over in seconds, but it requires running BGP with the upstream providers at every location. Worth it if the network team already does. GeoDNS is the simpler start.</li>
+        <li><strong>Site or cache for a new region?</strong> A cache if its users mostly view images that others view too, and a cache miss of 100–200 ms is acceptable. A full site if its traffic is large and spread over many rarely viewed images, if it uploads heavily, or if the business wants a third permanent copy.</li>
+        <li><strong>Uploaders never use GeoDNS.</strong> Each full site has a fixed internal hostname (<code>upload-a.cdn.internal</code>, <code>upload-b…</code>) that resolves to that site's virtual IP on the internal DNS. An uploading service is configured with its nearest site first and the other as fallback, and switches on connection errors; a <code>503</code> means retry the same site after <code>Retry-After</code>, not fail over. The upload endpoint is not reachable from the public hostname at all.</li>
+        <li><strong>Questions for the business:</strong> where are the users today and in two years, what load time is acceptable, how often is a typical image viewed, and may images sit on third-party infrastructure (a commercial CDN can replace our own caches)?</li>
+      </ul>
+  </div>
+
+  <h3 id="infrastructure">Fitting the on-premise infrastructure that exists <span class="hint">one data centre · two close sites · two distant sites</span></h3>
+  <div class="block">
+  <p>"On premise" means we work with the locations the company already has, and that may be fewer than this design assumes. The baseline needs two sites far enough apart to serve different regions. If they don't exist, the topology shrinks, but <strong>the software stays the same</strong>: a peer in another rack, another building or another country is the same HTTP call. Three things change: which failures the system survives, when an upload counts as done, and whether caches are possible.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Infrastructure available</th><th>Layout</th><th>What it survives</th><th>What it can't do, and how we compensate</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">One data centre</td>
+          <td>One cluster of <strong>3 nodes</strong>, spread across separate racks so they don't fail together. A third node replaces the second site: an upload still gets 2 copies with one node down.</td>
+          <td>A failed server or rack</td>
+          <td><strong>Losing the building means an outage.</strong> Compensate with an off-site backup on write-once storage, plus a tested restore plan with a stated recovery time (hours). <strong>Distant users are slower</strong>, and only a presence elsewhere fixes that. Meanwhile: cache-forever headers, smaller formats (AVIF/WebP), HTTP/2 and connection reuse.</td>
+        </tr>
+        <tr>
+          <td class="k">Two sites close together<br><span class="muted" style="font-weight:400">same city or campus, &lt;5 ms</span></td>
+          <td>Two full sites as in this design. The round trip between them is cheap, so <strong>every upload is confirmed in both sites</strong> before the <code>201</code>.</td>
+          <td>Losing either site, with no data loss</td>
+          <td><strong>Both sites serve the same region</strong>, so distant users gain nothing. They also share regional risks: power grid, flooding, often the same network carrier. The off-site backup should therefore be further away.</td>
+        </tr>
+        <tr>
+          <td class="k">Two distant sites<br><span class="muted" style="font-weight:400">the baseline</span></td>
+          <td>Two full sites plus cache-only locations wherever the company has a few servers.</td>
+          <td>Losing a site or a whole region</td>
+          <td>Confirming in both sites costs a slow round trip, so by default an upload is done after 2 copies in the local site, with cross-site confirmation as an option (<a href="CDN-Design.html#flows">design §2</a>). The link between sites is slower and less reliable, which the sync is designed for.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout ok">
+    <p><strong>Within every site, nodes sit in separate racks.</strong> Otherwise "2 copies" could mean two copies that fail together.</p>
+    <p class="muted">This is the first question for the infrastructure team: how many locations do we have, how far apart are they, and how are they connected? The answer picks the row above. Nothing else in the design has to change.</p>
+  </div>
+  </div>
+
+  <h3 id="components">Components <span class="hint">what runs where, and why nothing bigger</span></h3>
+  <div class="block">
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Component</th><th>Job</th><th>Why this and not something bigger</th></tr></thead>
+      <tbody>
+        <tr><td class="k">GeoDNS</td><td>Sends each user to the nearest healthy location. Self-hosted: PowerDNS with its GeoIP backend (or gdnsd), with an authoritative server at each full site.</td><td>Works with any network, and keeps answering if either site is down. Anycast is faster at failover but needs BGP everywhere (<a href="#routing">Routing</a>, above).</td></tr>
+        <tr><td class="k">keepalived + HAProxy<br><span class="muted" style="font-weight:400">per full site</span></td><td>One virtual IP per site, failover between two balancers, removes unhealthy nodes within seconds.</td><td>Standard on-premise HA. No cloud or hardware appliance needed.</td></tr>
+        <tr><td class="k">Nginx</td><td>TLS, serves image files straight from disk, cache headers, rate limits. Hands misses to the node service.</td><td>A local hit (nearly all traffic) never touches application code.</td></tr>
+        <tr><td class="k">Node service (Go)</td><td>Accepts uploads, pushes to peers, fetches on a miss, serves and reads the change feed.</td><td>Streams large files with little memory, handles many concurrent fetches, ships as one binary. A few hundred lines of real logic.</td></tr>
+        <tr><td class="k">Files on disk (XFS)</td><td>The images, named by their hash: <code>/data/ab/cd/abcd….jpg</code></td><td>Files never change, so the file system is the database.</td></tr>
+        <tr><td class="k">SQLite (per node)</td><td>Index of what the node holds, in arrival order (the change feed), plus sync cursors.</td><td>Embedded, no server to run. If lost, it's rebuilt by scanning the files.</td></tr>
+        <tr><td class="k">Cache server<br><span class="muted" style="font-weight:400">Nginx proxy_cache</span></td><td>Serves popular images in its region and fetches misses from the nearest full site.</td><td>Stock Nginx configuration, no custom code. Immutable URLs mean it never has to check whether a copy is current.</td></tr>
+        <tr><td class="k">Ansible + systemd</td><td>Installs and configures every server. One versioned config file lists sites, nodes and caches.</td><td>A handful of fixed machines per location gains nothing from Kubernetes.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="assumptions">
+  <h2><span class="n">4</span>Assumptions and sizing</h2>
+  <p>Expands <a href="CDN-Design.html#assumptions">§4 of the design</a>. The retrieval pattern is the assumption everything else rests on, so it comes first, then what changes if it is wrong, then the arithmetic behind the profile table and what changes between the three columns.</p>
+
+  <h3 id="retrieval">Expected image retrieval <span class="hint">what drives caches, RAM and origin traffic</span></h3>
+  <div class="block">
+  <p>How images are viewed matters more than how many there are. It decides whether caches work, how much RAM to buy, and how much traffic reaches the full sites.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Assumption</th><th>Value</th><th>What it drives</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Image requests per active user</td><td>~60 per day, after browser caching</td><td>Total request rate (profiles below)</td></tr>
+        <tr><td class="k">Peak vs average</td><td>~5× (evening peaks, campaigns)</td><td>All capacity numbers: everything is sized for peak</td></tr>
+        <tr><td class="k">Popularity</td><td>Skewed: roughly 10–20% of images get 80–90% of the views</td><td>Cache hit rate, RAM and cache disk size</td></tr>
+        <tr><td class="k">Age</td><td>Most views happen in the first days after upload, then fade</td><td>RAM sizing (recent uploads stay in memory), and why a new image must reach every node fast</td></tr>
+        <tr><td class="k">Views per image</td><td>Many: photo or product-picture style, seen by many users</td><td>Whether caches work at all</td></tr>
+        <tr><td class="k">Cache hit rate in other regions</td><td>~90%, following from the two rows above</td><td>How much traffic reaches the full sites (<a href="#derived">How the numbers were derived</a>, below)</td></tr>
+        <tr><td class="k">Bytes served</td><td>~500 KB average, originals only</td><td>Bandwidth, and therefore node count</td></tr>
+      </tbody>
+    </table>
+  </div>
+  </div>
+
+  <h3 id="if-wrong">If these assumptions are wrong <span class="hint">what changes</span></h3>
+  <div class="block">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>If instead…</th><th>Effect</th><th>Design response</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Most images are viewed once or twice (scans, receipts)</td><td>Cache hit rate collapses, and most traffic reaches the full sites</td><td>Fewer caches, bigger full sites, or a third full site</td></tr>
+            <tr><td class="k">Traffic is far peakier (viral or campaign driven)</td><td>Peak well above 5× average</td><td>Size for the measured peak. Bursts on a new image are already covered by merging duplicate misses (<a href="#traffic">§5</a>).</td></tr>
+            <tr><td class="k">Old images stay popular for years</td><td>The hot set is larger than RAM</td><td>More memory, or accept disk reads, which are still fast</td></tr>
+            <tr><td class="k">Clients are mostly on mobile</td><td>Many bytes wasted on full-size originals</td><td>Resized and AVIF/WebP versions become worth building (<a href="#not-built">§6</a>), typically 30–60% less egress</td></tr>
+            <tr><td class="k">Users are spread far wider</td><td>More regions more than ~50 ms from a full site</td><td>More cache locations. A full site only where a region's traffic is large and its images rarely viewed (<a href="#routing">§3</a>).</td></tr>
+            <tr><td class="k">Only one data centre, or sites close together</td><td>Fewer kinds of failure survived; distant users are slower</td><td>Smaller topology, same software (<a href="#infrastructure">§3</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+  </div>
+
+  <h3 id="derived">How the numbers were derived <span class="hint">back of the envelope</span></h3>
+  <div class="block">
+      <ul>
+        <li><strong>Requests:</strong> from <a href="#retrieval">Expected image retrieval</a>, above: 60 image requests per active user per day, average = requests/day ÷ 86,400, peak ≈ 5× average.</li>
+        <li><strong>Origin traffic:</strong> 60% of requests come from users near the full sites; the other 40% go to caches, which serve ~90% of them (photo-like traffic, images viewed many times). At M: 600 + 400 × 10% ≈ 640 GETs/s reach the full sites at peak. With a long-tail workload the cache hit rate would be lower and origin traffic higher. That's the assumption to validate first (<a href="#retrieval">Expected image retrieval</a>, above).</li>
+        <li><strong>Egress:</strong> GETs × 500 KB, a deliberately conservative average. Serving resized and AVIF/WebP versions would typically cut it by 30–60%.</li>
+        <li><strong>What sets the node count:</strong> read traffic with one node down, not uploads or storage. Replication is tiny next to reads (≈2 MB/s at M: one push to the local peer and one to the other site), and storage never sets it: even at L, ~220 TB after 4 years fits on one dense storage server, so every node keeps every image.</li>
+        <li><strong>Cache size:</strong> the images a region views within a few weeks, not the whole dataset.</li>
+        <li><strong>Storage growth:</strong> uploads/day × 500 KB × 365: about 3.6 TB a year at M and 55 TB at L.</li>
+        <li><strong>Traffic between full sites is small:</strong> each image crosses once. At M: ~2 uploads/s at peak × 500 KB ≈ 1 MB/s. The link between sites only matters for catch-up and for rebuilding a whole site.</li>
+      </ul>
+  </div>
+
+  <h3 id="profiles">Profiles S and L <span class="hint">which decisions change between the columns</span></h3>
+  <div class="block">
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>S · start</th><th class="base">M · target</th><th>L · growth</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="k">Nodes per full site</td><td class="num">2</td><td class="num base">2</td><td class="num">4</td></tr>
+        <tr><td class="k">What changes</td><td class="muted">No caches: all users are near the two sites.</td><td class="base muted">The baseline described in the design.</td><td><strong>Every node still holds every image</strong>, on dense storage servers: ~220 TB needed after 4 years vs ~600 TB usable in one 4U, 36-bay server. 4 nodes per site for read throughput, with 25 GbE between nodes so rebuilding a node takes under a day. Possibly a third full site.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  </div>
+
+  <div class="callout ok">
+    <p><strong>Validate from day one.</strong> Measure the cache hit rate per location, the share of views by image age, the peak-to-average ratio and the average bytes served. Re-check the sizing at the first hardware purchase cycle. Most of these numbers are cheap to measure and expensive to guess wrong.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="failures">
+  <h2><span class="n">5</span>Failures, guarantees and traffic patterns</h2>
+  <p>Expands <a href="CDN-Design.html#failures">§5 of the design</a>, which holds the failure table and the consistency model. As a client sees it, that model rests on three guarantees:</p>
+
+
+  <div class="grid3">
+    <div class="card"><span class="pill">201</span><p style="margin-top:8px">The image is safely on disk on at least 2 nodes: normally in the same site, or in both full sites if the uploader asked for it.</p></div>
+    <div class="card"><span class="pill">Any location</span><p style="margin-top:8px">After a <code>201</code>, every node can serve the image at once and every cache within 10 s, as long as one of its holders is reachable.</p></div>
+    <div class="card"><span class="pill">200 / 404</span><p style="margin-top:8px">The bytes always match the ID, except a file corrupted on a node's own disk until the re-hash catches it. A 404 is always confirmed by every node, never a guess; a cache may repeat a confirmed 404 for up to 10 s, and a node for a few seconds unless the image reaches it first.</p></div>
+  </div>
+
+  <h3 id="traffic">Traffic patterns <span class="hint">what the design does under stress</span></h3>
+  <p>The retrieval pattern assumed in <a href="#retrieval">§4</a> is skewed, recency-heavy and peaky. This is how the design behaves under it, and under the cases that stress it most.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Pattern</th><th>What would go wrong</th><th>What the design does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Repeat views</td><td>The same user downloads the same image over and over.</td><td>URLs never change content, so responses say "cache for a year, never revalidate". Repeat views cost nothing.</td></tr>
+        <tr><td class="k">New image goes viral instantly</td><td>Thousands of requests in every region miss at once, at caches and at nodes that don't have it yet.</td><td>The upload reaches the other full site within one round trip plus transfer time, typically under 200 ms (<a href="#upload">§2</a>). Each cache and each node merges concurrent misses into <strong>one</strong> fetch. The worst case is one fetch per cache and per node, not one per user.</td></tr>
+        <tr><td class="k">Full site outage</td><td>The surviving site saturates.</td><td>Sized to carry all origin traffic alone (<a href="CDN-Design.html#assumptions">design §4</a>). Caches keep serving their hits throughout.</td></tr>
+        <tr><td class="k">Rarely viewed images</td><td>Cache hit rate drops, and more traffic travels to the full sites.</td><td>Watch the hit rate per cache. If a region's traffic is mostly misses, it needs a full site, not a cache (<a href="#routing">§3</a>).</td></tr>
+        <tr><td class="k">Bulk import / upload burst</td><td>Replication competes with reads, or fills the link between sites.</td><td>Per-API-key upload rate limits. Each image crosses once (≈1 MB/s at M). Catch-up between sites is capped; catch-up inside a site is throttled to the live traffic of both the fetching and the serving node.</td></tr>
+        <tr><td class="k">Random-ID probing (abuse)</td><td>Every miss travels to the full sites and fans out.</td><td>Strict ID format check at every location, short memory of recent misses, per-IP rate limit on misses only.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="not-built">
+  <h2><span class="n">6</span>Tools we chose not to use (yet)</h2>
+  <p>Expands <a href="CDN-Design.html#not-built">§6 of the design</a>: the same list, with a third column saying what would change each decision. <a href="CDN-Design.html#sizing">§4 of the design</a> covers when to scale what we <em>did</em> build; this table covers when to add what we didn't.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Not used</th><th>Why not now</th><th>Add it when</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Message broker<br><span class="muted" style="font-weight:400">NATS JetStream, Kafka</span></td><td>Push plus the change feed already gives fast delivery and exact catch-up across nodes and sites. A broker would need its own cluster, and mirroring between sites.</td><td>Other systems want the event stream (thumbnailing, moderation, analytics).</td></tr>
+        <tr><td class="k">Central metadata database</td><td>It would be a single point of failure, and a cross-site hop for every miss at the other site.</td><td>Never for this scope. Names and ownership belong in the application that uses the CDN.</td></tr>
+        <tr><td class="k">Distributed object store<br><span class="muted" style="font-weight:400">Ceph, MinIO, SeaweedFS</span></td><td>Built to spread data, not to copy everything everywhere. Running one per site, plus replication between them, is far heavier than this.</td><td>Full copies per site are dropped and the team already runs one.</td></tr>
+        <tr><td class="k">Commercial CDN</td><td>The company has its own locations, and our cache servers do the same job on hardware we control.</td><td>Users appear in regions where we have no hardware, and the business allows third-party caching.</td></tr>
+        <tr><td class="k">BGP anycast</td><td>GeoDNS gives nearest-location routing without running BGP everywhere.</td><td>Failover must take seconds, not minutes, and the network team runs BGP.</td></tr>
+        <tr><td class="k">Full hash-based placement</td><td>A hash is used only to pick which node in a site fetches an image from the other site. While every node holds everything, nothing else needs placement.</td><td>Data approaches ~0.5 PB (80% of one dense server) and the business agrees to drop "every node has every image".</td></tr>
+        <tr><td class="k">Kubernetes</td><td>A few fixed, disk-heavy machines per location gain little from an orchestrator, and a control plane per site adds risk.</td><td>The organisation already runs it on premise everywhere and operates storage on it.</td></tr>
+        <tr><td class="k">Image resizing / format conversion</td><td>Not asked for.</td><td>Mobile bandwidth or egress cost matters. Usually the biggest egress saving (30–60%), cached per node and never replicated.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="ids">
+  <h2><span class="n">7</span>Why content-addressed IDs <span class="hint">the core decision</span></h2>
+  <div class="block">
+      <pre>id   = hex(SHA-256(bytes))                     # 64 lowercase hex characters
+URL  = https://cdn.example.com/images/{id}.{ext}
+file = /data/{id[0:2]}/{id[2:4]}/{id}.{ext}    # 65,536 directories, none gets huge</pre>
+      <ul>
+        <li><strong>Idempotent uploads, free deduplication:</strong> the same bytes always get the same ID, whichever site they're uploaded to.</li>
+        <li><strong>No conflicts:</strong> two different images can't share an ID, so replicas are byte-identical by definition and syncing is just "copy what you're missing", even after the sites have been cut off from each other.</li>
+        <li><strong>Built-in integrity:</strong> every copy can be checked against its own name, in transit and on disk.</li>
+        <li><strong>Cache forever:</strong> <code>Cache-Control: public, max-age=31536000, immutable</code> and <code>ETag: "{id}"</code>. Browsers, our cache locations and any proxy in between never revalidate.</li>
+        <li><strong>Safe paths:</strong> IDs are validated against <code>^[0-9a-f]{64}$</code> before touching the file system.</li>
+        <li><strong>Trade-off accepted:</strong> clients can't choose file names. A name-to-ID mapping belongs in the application that owns the names.</li>
+        <li><strong>Trade-off accepted: the URL is an existence oracle.</strong> Anyone who holds an image's bytes can compute its URL and learn whether the CDN has it, and a second uploader of the same bytes learns the image already existed (<code>200</code> instead of <code>201</code>). For public product or editorial images that's harmless. If private images are ever stored, two fixes exist without changing the design: serve them behind signed URLs (<a href="#operations">§8</a>), or make the public name <code>HMAC(secret, id)</code> while nodes keep using the SHA-256 internally. The second keeps every sync and integrity property between nodes and only costs browsers the ability to verify a file against its name.</li>
+      </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="operations">
+  <h2><span class="n">8</span>Operations essentials <span class="hint">health, monitoring, security, backup</span></h2>
+  <div class="block">
+      <h3>Health checks</h3>
+      <ul>
+        <li><strong>Node read readiness</strong> depends only on the node itself: disk readable, not in maintenance. It deliberately does <em>not</em> depend on peers. Otherwise a network blip would make every node "unhealthy" at once, even though every node can serve its own copies.</li>
+        <li><strong>Node write readiness</strong> also requires disk below 90% and at least one reachable peer (local or remote).</li>
+        <li><strong>Location health for GeoDNS</strong> = the location serves a known test image. Each DNS server fetches that test image through the location's public address, never over the private link, so a full site cut off from the other but serving its users stays in rotation. A location is withdrawn only when its public service fails.</li>
+        <li>"Fully caught up" is <em>not</em> required anywhere: fetch-on-miss makes a lagging node correct.</li>
+      </ul>
+      <h3>What to monitor (Prometheus + Grafana per location, federated)</h3>
+      <ul>
+        <li><strong>Replication lag</strong>, the key signal, inside each site and between the sites: images in peers' feeds that this node doesn't have yet, and the age of the oldest one.</li>
+        <li><strong>Cache hit rate</strong> per cache location. It decides whether a region is well served by a cache or needs a full site.</li>
+        <li>Miss rate at the full sites, 404 vs 503 rates, p99 latency per path, traffic between sites, disk fill and <strong>days until full</strong> (alert at 90 days: on-premise hardware takes weeks to arrive).</li>
+      </ul>
+      <h3>Security</h3>
+      <ul>
+        <li>Uploads need a per-service API key and are accepted only at the full sites, from internal networks. GETs are public (or signed URLs if needed).</li>
+        <li>Node-to-node and cache-to-origin traffic uses TLS (mTLS between nodes) over private links or a VPN, and internal endpoints are never exposed through a balancer or a cache.</li>
+        <li>Uploads are checked for size, format and image dimensions. <code>X-Content-Type-Options: nosniff</code> and a strict CSP stop an image URL from serving active content.</li>
+      </ul>
+      <h3>Backup and takedown</h3>
+      <ul>
+        <li><strong>Two sites are not a backup.</strong> They survive losing hardware, but a bug or a compromised admin account reaches both. A backup host reads the change feed like a node and writes to write-once storage, isolated from the CDN's credentials. Restores are tested twice a year.</li>
+        <li><strong>Legal takedowns</strong> (court order, illegal content) happen even without a delete feature. A small blocklist, synced like the images, moves the file out of the served folder at both sites and answers <code>451</code>, and a purge request removes it from every cache location. Re-uploads of the same bytes are blocked automatically. Copies already in users' browsers can't be recalled by any CDN. The blocklist is a file rolled out with the versioned node list (Ansible), applied before a node replays feeds, and a blocked ID counts as stored for the cursor rule above: the fetcher skips it without calling the peer, so catch-up never stalls on a removed image. The cache purge is a small script that deletes the cached file for that key on each cache server, since stock Nginx has no purge endpoint.</li>
+      </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="api">
+  <h2><span class="n">9</span>API <span class="hint">public and internal</span></h2>
+  <div class="block">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Endpoint</th><th>Responses</th></tr></thead>
+          <tbody>
+            <tr><td class="num">POST /images</td><td>Full sites only. <code>201</code> new · <code>200</code> already existed · <code>400</code> bad format · <code>413</code> over 25 MB · <code>401</code> bad key · <code>503</code> couldn't store the copies asked for, 2 local or one per site (retry later, don't fail over). Returns <code>{ id, url, size, type }</code>. Optional <code>X-Durability: cross-site</code>, if the key allows it.</td></tr>
+            <tr><td class="num">GET /images/{id}.{ext}</td><td>Any location. <code>200</code> (Range → <code>206</code>) · <code>304</code> · <code>400</code> malformed ID · <code>404</code> confirmed absent · <code>503</code> couldn't confirm. The ID alone identifies the bytes; the extension is recorded at upload from the detected format. A request with the wrong extension gets a <code>301</code> to the canonical URL, so there is exactly one cacheable URL per image. A bare <code>/images/{id}</code> works the same way.</td></tr>
+            <tr><td class="num">PUT /internal/images/{id}</td><td>Peer push (local, or to the other site's responsible node, which passes it on). The receiver verifies the hash before confirming.</td></tr>
+            <tr><td class="num">GET /internal/images/{id}</td><td>Peer fetch on a miss or during catch-up.</td></tr>
+            <tr><td class="num">GET /internal/changes?since=N</td><td>Change feed, paginated, with epoch.</td></tr>
+          </tbody>
+        </table>
+      </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="testing">
+  <h2><span class="n">10</span>How the design would be tested <span class="hint">proving the guarantees</span></h2>
+  <div class="block">
+      <ul>
+        <li><strong>Unit:</strong> ID validation, crash-safe write, change-feed paging and epoch reset, choice of the responsible node per site, the cursor staying below any missing image when workers finish out of order, and startup repair resolving pending rows (file present: stored with a new sequence number; file absent: row deleted).</li>
+        <li><strong>Integration</strong> (Docker Compose: 2 "sites" × 2 nodes plus 1 cache, with added latency between sites): upload at site A, immediately GET at site B and through the cache; stop a node, upload 1,000 images, restart it and check it converges; p99 time from <code>201</code> to the last node holding the image stays under the target (~100 ms inside a site).</li>
+        <li><strong>Fault injection</strong> (Toxiproxy, killing processes): cut the sites apart, upload on both sides, heal and check convergence; stop a full site and check the cache fails over; crash mid-upload and mid-catch-up; corrupt a file on disk; drop a push and check it is retried, then caught by the feed; kill a node halfway through a newest-first catch-up, restart it, and check it converges without downloading any file twice; add a third node to a site under load with the two-step rollout and check it serves correct bytes from the first second and no image is missed while the hash order changes.</li>
+        <li><strong>Invariant check:</strong> record every <code>201</code>, and after the chaos run assert that every confirmed image is readable and byte-identical from every node and through every cache.</li>
+        <li><strong>WAN efficiency:</strong> count bytes between sites during a bulk upload, and assert each image crossed once.</li>
+        <li><strong>Load</strong> (k6): hit, miss and upload paths at the profile-M peak, including one full site carrying everything.</li>
+      </ul>
+  </div>
+</section>
+
+<footer>Images CDN · Exercise 2 · Supporting material for <a href="CDN-Design.html">CDN-Design.html</a>.</footer>
+
+</div>
+<a class="totop" href="#top" aria-label="Back to the start">&uarr; Top</a>
+<script>
+  (function () {
+    var b = document.querySelector('.totop');
+    function t() { b.hidden = window.scrollY < 400; }
+    b.addEventListener('click', function (e) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    window.addEventListener('scroll', t, { passive: true }); t();
+  })();
+</script>
+</body>
+</html>

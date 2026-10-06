@@ -1,0 +1,19 @@
+# `docker compose up -d mongo` starts MongoDB, reachable from this machine at
+# mongodb://localhost:27017 for the natively installed CLI (see install.sh).
+services:
+  mongo:
+    image: mongo:7.0.43
+    # Published on the loopback interface only, so the installed CLI can reach
+    # it but other machines on the network cannot.
+    ports:
+      - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mongo-data:

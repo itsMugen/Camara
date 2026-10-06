@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Images CDN Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --paper: #f4f6f9;
+  --sheet: #ffffff;
+  --ink: #17202d;
+  --muted: #5b6679;
+  --line: #c6cfdc;
+  --chip: #edf1f7;
+  --accent: #2747b5;
+  --sync: #9a5f0c;
+  --ok: #2c7653;
+  --warn: #a33a2a;
+  --wan: #6b3fa0;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f131a; --sheet: #161c26; --ink: #e5e9f0; --muted: #98a3b5; --line: #344156;
+    --chip: #202938; --accent: #8aa3ff; --sync: #e2a750; --ok: #62c497; --warn: #f0826f; --wan: #c39bf0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f131a; --sheet: #161c26; --ink: #e5e9f0; --muted: #98a3b5; --line: #344156;
+  --chip: #202938; --accent: #8aa3ff; --sync: #e2a750; --ok: #62c497; --warn: #f0826f; --wan: #c39bf0;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15.5px/1.6 var(--font-body);
+  padding: 32px 16px 64px;
+}
+.wrap { max-width: 980px; margin-inline: auto; display: grid; gap: 36px; }
+
+header { border-bottom: 2px solid var(--ink); padding-bottom: 16px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+h1 { font: 600 clamp(30px, 4.4vw, 44px)/1.05 var(--font-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 12px 0 0; color: var(--muted); max-width: 68ch; font-size: 16.5px; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 16px; }
+nav.toc a { font: 500 12.5px/1 var(--font-mono); color: var(--ink); text-decoration: none; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+section { display: grid; gap: 14px; scroll-margin-top: 16px; }
+h3[id], h2[id] { scroll-margin-top: 16px; }
+h2 { font: 600 24px/1.2 var(--font-display); margin: 0; }
+h2 .n { font: 500 13px/1 var(--font-mono); color: var(--muted); margin-right: 10px; vertical-align: 3px; }
+h3 { font: 600 17px/1.3 var(--font-display); margin: 6px 0 0; }
+p { margin: 0; max-width: 72ch; }
+.muted { color: var(--muted); }
+code { font: 13px var(--font-mono); background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+strong { font-weight: 600; }
+
+.card { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-width: 0; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .grid3, .grid2 { grid-template-columns: 1fr; } }
+
+.tag { font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.req { display: grid; gap: 6px; align-content: start; }
+.req .ask { font-weight: 600; }
+.req .how { color: var(--muted); font-size: 14.5px; }
+
+.callout { border-left: 4px solid var(--accent); background: var(--sheet); padding: 14px 18px; border-radius: 0 8px 8px 0; }
+.callout.sync { border-left-color: var(--sync); }
+.callout.ok { border-left-color: var(--ok); }
+.callout p + p { margin-top: 8px; }
+
+ul, ol { margin: 0; padding-left: 20px; max-width: 72ch; }
+li + li { margin-top: 4px; }
+
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 13px/1.3 var(--font-display); letter-spacing: .02em; background: var(--chip); }
+td.k { font-weight: 600; white-space: nowrap; }
+th.base, td.base { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.num { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; }
+
+details { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; }
+details > summary { cursor: pointer; list-style: none; padding: 12px 16px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+"; font: 500 15px/1 var(--font-mono); color: var(--accent); width: 12px; flex: none; }
+details[open] > summary::before { content: "\2212"; }
+details > summary .hint { font: 400 13px var(--font-mono); color: var(--muted); margin-left: auto; white-space: nowrap; }
+details > .body { padding: 2px 18px 18px 38px; display: grid; gap: 12px; }
+details > .body .tablewrap { margin-left: -20px; }
+@media (max-width: 760px) { details > summary .hint { display: none; } details > .body { padding-left: 18px; } details > .body .tablewrap { margin-left: 0; } }
+
+pre { margin: 0; font: 12.5px/1.55 var(--font-mono); background: var(--chip); border-radius: 6px; padding: 12px 14px; overflow-x: auto; }
+
+.diagram { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+svg text { font-family: var(--font-body); fill: var(--ink); }
+svg .t-b { font: 600 14px var(--font-display); }
+svg .t-s { font-size: 11.5px; fill: var(--muted); }
+svg .t-m { font: 11px var(--font-mono); fill: var(--muted); }
+svg .box { fill: var(--sheet); stroke: var(--line); stroke-width: 1.2; }
+svg .node { fill: var(--chip); stroke: var(--ink); stroke-width: 1.4; }
+svg .part { fill: var(--sheet); stroke: var(--line); stroke-width: 1; }
+svg .req { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+svg .peer { stroke: var(--sync); stroke-width: 1.8; fill: none; stroke-dasharray: 6 4; }
+svg .ah-req { fill: var(--accent); }
+svg .ah-peer { fill: var(--sync); }
+svg .wan { stroke: var(--wan); stroke-width: 2.2; fill: none; stroke-dasharray: 2 4; stroke-linecap: round; }
+svg .ah-wan { fill: var(--wan); }
+svg .site { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.callout.wan { border-left-color: var(--wan); }
+svg .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 4; }
+svg .resp { stroke: var(--ok); stroke-width: 1.6; fill: none; stroke-dasharray: 5 3; }
+svg .ah-resp { fill: var(--ok); }
+svg .note { fill: var(--chip); stroke: var(--line); stroke-width: 1; }
+.card .diagram + h3, .card h3 + .diagram { margin-top: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; font: 12px/1.4 var(--font-mono); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 28px; border-top: 2px solid; }
+
+.steps { counter-reset: s; list-style: none; padding: 0; display: grid; gap: 8px; }
+.steps li { counter-increment: s; position: relative; padding-left: 32px; font-size: 14.5px; margin: 0; }
+.steps li::before { position: absolute; left: 0; top: 1px; content: counter(s); font: 500 12px/22px var(--font-mono); text-align: center; width: 22px; height: 22px; border-radius: 50%; background: var(--chip); border: 1px solid var(--line); }
+
+.pill { display: inline-block; font: 500 11.5px/1 var(--font-mono); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); white-space: nowrap; }
+
+h3 .hint { font: 400 13px var(--font-mono); color: var(--muted); margin-left: 8px; }
+.block { display: grid; gap: 12px; background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+.block > .tablewrap { margin-inline: -18px; border-radius: 0; border-inline: 0; }
+@media (max-width: 760px) { .block > .tablewrap { margin-inline: -18px; } }
+.more { font: 500 13px/1.5 var(--font-mono); color: var(--muted); max-width: none; }
+.more a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+.more a:hover { border-bottom-color: var(--accent); }
+nav.toc a.alt { border-style: dashed; }
+.totop { position: fixed; right: 20px; bottom: 20px; z-index: 10; display: inline-flex; align-items: center; gap: 8px; font: 500 12.5px/1 var(--font-mono); color: var(--ink); text-decoration: none; background: var(--sheet); border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; box-shadow: 0 2px 10px rgb(0 0 0 / .12); transition: opacity .2s; }
+.totop:hover { border-color: var(--accent); color: var(--accent); }
+.totop[hidden] { display: none; }
+@media print { .totop { display: none; } }
+footer { border-top: 1px solid var(--line); padding-top: 14px; font: 12.5px/1.6 var(--font-mono); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header id="top">
+  <p class="eyebrow">Exercise 2 · System design</p>
+  <h1>Images CDN on premise</h1>
+  <p class="lede">This is the design at a high level: the decisions that matter, the mechanism behind each one, and the reason for it in a sentence. The box below is the whole scheme on one screen. §1 maps each line of the brief to the mechanism that meets it, §2 shows the three flows with a figure each, §3 is the architecture with its diagram, §4 sizes it, §5 says what happens when things fail, and §6 lists what was left out and why. Sections 2 to 6 each end with a link to the same section of <a href="CDN-Design-Details.html">CDN-Design-Details.html</a>, where the full argument, the edge cases and the arithmetic behind it are worked through.</p>
+  <nav class="toc" aria-label="Contents">
+    <a href="#requirements">1 Requirements</a>
+    <a href="#flows">2 How it works</a>
+    <a href="#architecture">3 Architecture</a>
+    <a href="#assumptions">4 Assumptions &amp; sizing</a>
+    <a href="#failures">5 Failures</a>
+    <a href="#not-built">6 Tools not used (yet)</a>
+    <a class="alt" href="CDN-Design-Details.html">Details</a>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section id="summary">
+  <div class="callout">
+    <p class="muted" style="margin-bottom:12px"><strong>Scope.</strong> The brief's cluster is one <em>full site</em>: identical nodes that all hold every image. Going beyond the brief, two full sites hold everything and stay in sync, cache-only locations in other regions are plain Nginx in front of them, and GeoDNS routes users to the nearest healthy location. The node software is the same either way. Figures 1–3 in <a href="#flows">§2</a>, architecture diagram in <a href="#architecture">§3</a>.</p>
+    <p><strong>The design in five decisions.</strong></p>
+    <ol class="steps" style="margin-top:10px">
+      <li><strong>An image's ID is the SHA-256 of its bytes.</strong> Images are never changed or deleted, so copies can never conflict, uploads are idempotent, every copy is self-verifying, and URLs are cached forever.</li>
+      <li><strong>Every node in a full site holds every image.</strong> A cluster is a set of identical nodes, each running Nginx and a small Go service over local disk. No master, no central database, no broker, no coordination service.</li>
+      <li><strong>Upload = push to every peer, <code>201</code> after the second copy.</strong> The receiving node pushes in parallel to its local peers and to one responsible node in the other site, which fans out locally. In sync, each image crosses the slow link once.</li>
+      <li><strong>Read = serve locally, else fetch from a peer, verify, keep, serve.</strong> Local peers first; the other site only if none has it or none answers within 50 ms. <code>404</code> only when every node confirmed absence, <code>503</code> when one didn't answer.</li>
+      <li><strong>Resync = per-peer change feed with a cursor.</strong> Each node numbers its images in arrival order. A restarted, rebuilt or brand-new node reads every peer's feed from its last cursor and pulls exactly what it is missing, newest first, while already serving traffic. One mechanism covers sync, recovery and new capacity.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="requirements">
+  <h2><span class="n">1</span>What was asked, and how it is met</h2>
+  <p>The three requirements of the brief, the mechanism that meets each one, and where it's explained. Everything after this section supports these three answers.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Requirement</th><th>How the design meets it</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="k" style="white-space:normal;width:30%">1 · A new image (POST) reaches all cluster nodes, as quickly as possible</td><td>The receiving node pushes the image <strong>in parallel</strong> to every other node in its site and to the responsible node in the other full site, which passes it on. <code>201</code> once a second copy is confirmed. Failed pushes are retried, and a change feed polled every few seconds catches anything still missing. <strong>Every node ends up with every image.</strong></td><td><a href="#figure-1">§2 Upload, figure 1</a></td></tr>
+        <tr><td class="k" style="white-space:normal;width:30%">2 · A GET succeeds on a node that hasn't synced the image yet</td><td>On a local miss the node asks its local peers; if none has the image, or none answers within 50 ms, it asks the other site too. It checks the hash, saves the file and serves it. Concurrent misses become one fetch. <code>404</code> only if every node said no; <code>503</code> if one hasn't answered within the miss budget (~2 s).</td><td><a href="#figure-2">§2 Read, figure 2</a></td></tr>
+        <tr><td class="k" style="white-space:normal;width:30%">3 · A node that went down resyncs as quickly as possible on startup</td><td>Each node keeps a cursor into every peer's change feed. On startup it serves traffic at once, then pulls exactly what it missed: from all local peers in parallel, newest images first, throttled to its own live traffic.</td><td><a href="#figure-3">§2 Resync, figure 3</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">Consistency model: eventually consistent copies, but every read gives the right answer, caches within 10 s of an upload (<a href="#failures">§5</a>). Image deletion is out of scope, and the design relies on that: the image set only grows, so copies can never conflict.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="flows">
+  <h2><span class="n">2</span>How it works</h2>
+  <p>Three flows, one per requirement of the brief. A <strong>full site</strong> is one cluster of identical nodes that all hold every image. The second full site and the cache-only locations are the extensions described in <a href="#architecture">§3</a>; they add resilience and reach without changing the node software.</p>
+  <div class="grid3">
+    <div class="card">
+      <span class="tag">Upload · requirement 1</span>
+      <h3>POST /images</h3>
+      <ol class="steps">
+        <li>The uploader's nearest full site receives the upload. One node streams it to a temporary file, computing the SHA-256 as it goes and checking type and size.</li>
+        <li>It saves the file under its hash and records it in its index.</li>
+        <li>In parallel, it pushes the image to <strong>every other node in its site</strong> and to <strong>the responsible node in the other full site</strong>: the node picked by hashing the image ID over that site's node list, so every node agrees without coordination.</li>
+        <li>As soon as one other copy is confirmed (normally a local peer, within milliseconds) it answers <code>201</code>. The image is on 2 disks.</li>
+        <li>The node in the other site passes it on to every other node in its site. A failed push is retried, and anything still missing is picked up by the change feed.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <span class="tag">Read · requirement 2</span>
+      <h3>GET /images/{id}</h3>
+      <ol class="steps">
+        <li>GeoDNS sends the user to the nearest location: a full site or a cache.</li>
+        <li><strong>At a cache:</strong> a hit is served straight away. A miss is fetched from the nearest full site, stored, and served.</li>
+        <li><strong>At a full site:</strong> Nginx serves the file from memory or disk with a <em>cache forever</em> header. This is nearly all traffic.</li>
+        <li>On a miss there, the node asks its <strong>local peers</strong>, then the <strong>other full site</strong>. It checks the hash, saves and serves. <code>404</code> only if every node said no; <code>503</code> if some didn't answer.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <span class="tag">Resync · requirement 3</span>
+      <h3>A node or a site comes back</h3>
+      <ol class="steps">
+        <li>Every node numbers the images it stores in arrival order: 1, 2, 3… This is its <strong>change feed</strong>.</li>
+        <li>Each node remembers, for every peer, the highest number up to which it has stored everything: its <strong>cursor</strong> into that peer's feed.</li>
+        <li><strong>A node</strong> catches up from all its local peers in parallel over the fast local network, newest images first (most views happen in an image's first days, <a href="#assumptions">§4</a>), at full speed while it is quiet and slower as its own traffic rises. <strong>A whole site</strong> catches up from the other site, each missing image crossing once.</li>
+        <li>Both serve traffic from the first second. Anything not copied yet is fetched on demand. Caches never need to resync.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="card">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="q-req" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-req"/></marker><marker id="q-peer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-peer"/></marker><marker id="q-wan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-wan"/></marker><marker id="q-resp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-resp"/></marker></defs></svg>
+    <h3 id="figure-1">Figure 1 · Upload</h3>
+    <div class="diagram"><svg viewBox="0 0 960 470" role="img" aria-label="Upload sequence: the uploader posts to site A's load balancer; node A1 stores the image, pushes it in parallel to every other node in site A and to the responsible node in site B, answers 201 after the first confirmed second copy, and B1 passes the image on to the rest of site B."><rect x="2" y="16" width="136" height="42" rx="5" class="box"/><text x="70" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Uploader</text><text x="70" y="50" text-anchor="middle" class="t-m">internal service</text><line x1="70" y1="58" x2="70" y2="456" class="life"/><rect x="142" y="16" width="136" height="42" rx="5" class="box"/><text x="210" y="34" text-anchor="middle" class="t-b" style="font-size:13px">LB · site A</text><text x="210" y="50" text-anchor="middle" class="t-m">HAProxy virtual IP</text><line x1="210" y1="58" x2="210" y2="456" class="life"/><rect x="302" y="16" width="136" height="42" rx="5" class="box"/><text x="370" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node A1</text><text x="370" y="50" text-anchor="middle" class="t-m">receives upload</text><line x1="370" y1="58" x2="370" y2="456" class="life"/><rect x="472" y="16" width="136" height="42" rx="5" class="box"/><text x="540" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node A2</text><text x="540" y="50" text-anchor="middle" class="t-m">+ rest of site A</text><line x1="540" y1="58" x2="540" y2="456" class="life"/><rect x="652" y="16" width="136" height="42" rx="5" class="box"/><text x="720" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node B1</text><text x="720" y="50" text-anchor="middle" class="t-m">responsible in B</text><line x1="720" y1="58" x2="720" y2="456" class="life"/><rect x="812" y="16" width="136" height="42" rx="5" class="box"/><text x="880" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node B2</text><text x="880" y="50" text-anchor="middle" class="t-m">rest of site B</text><line x1="880" y1="58" x2="880" y2="456" class="life"/><path d="M70 94 L210 94" class="req" marker-end="url(#q-req)"/><text x="140.0" y="88" text-anchor="middle" class="t-s">POST /images</text><path d="M210 124 L370 124" class="req" marker-end="url(#q-req)"/><text x="290.0" y="118" text-anchor="middle" class="t-s">forward</text><rect x="255.0" y="136" width="230" height="40" rx="4" class="note"/><text x="370" y="154" text-anchor="middle" class="t-m">stream to temp · SHA-256 · type/size</text><text x="370" y="169" text-anchor="middle" class="t-m">fsync · rename to {id} · index row</text><path d="M370 204 L540 204" class="peer" marker-end="url(#q-peer)"/><text x="455.0" y="198" text-anchor="middle" class="t-s">PUT /internal/images/{id}</text><path d="M370 234 L720 234" class="wan" marker-end="url(#q-wan)"/><text x="600" y="228" text-anchor="middle" class="t-s">PUT · in parallel · crosses once</text><path d="M540 266 L370 266" class="resp" marker-end="url(#q-resp)"/><text x="455.0" y="260" text-anchor="middle" class="t-s">200 · hash verified</text><path d="M370 300 L70 300" class="resp" marker-end="url(#q-resp)"/><text x="210" y="294" text-anchor="middle" class="t-s">201 Created · {id, url} · on 2 disks</text><path d="M720 332 L370 332" class="resp" marker-end="url(#q-resp)"/><text x="630" y="326" text-anchor="middle" class="t-s">200 · not awaited by the 201</text><path d="M720 366 L880 366" class="peer" marker-end="url(#q-peer)"/><text x="800.0" y="360" text-anchor="middle" class="t-s">PUT over B's LAN</text><rect x="160.0" y="394" width="640" height="40" rx="4" class="note"/><text x="480" y="412" text-anchor="middle" class="t-m">lost push → retried 3× (100 ms, 500 ms, 2 s), then caught by the change feed</text><text x="480" y="427" text-anchor="middle" class="t-m">target: all of site A within ~100 ms of the 201 · site B within ~1 RTT + transfer</text></svg></div>
+    <h3 id="figure-2" style="margin-top:22px">Figure 2 · Read on a node that doesn't have the image yet</h3>
+    <div class="diagram"><svg viewBox="0 0 960 480" role="img" aria-label="Read on a miss: Nginx on node A2 does not have the file and hands the request to the node service, which asks local peer A1, then, if A1 does not have it or does not answer within 50 milliseconds, asks both nodes in site B in parallel, verifies the first copy, stores it and returns 200; 404 only if every node said no, 503 if any did not answer within the 2 second miss budget."><rect x="2" y="16" width="136" height="42" rx="5" class="box"/><text x="70" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Client</text><text x="70" y="50" text-anchor="middle" class="t-m">browser / app</text><line x1="70" y1="58" x2="70" y2="466" class="life"/><rect x="162" y="16" width="136" height="42" rx="5" class="box"/><text x="230" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Nginx · A2</text><text x="230" y="50" text-anchor="middle" class="t-m">serves from disk</text><line x1="230" y1="58" x2="230" y2="466" class="life"/><rect x="332" y="16" width="136" height="42" rx="5" class="box"/><text x="400" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node service · A2</text><text x="400" y="50" text-anchor="middle" class="t-m">Go</text><line x1="400" y1="58" x2="400" y2="466" class="life"/><rect x="502" y="16" width="136" height="42" rx="5" class="box"/><text x="570" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node A1</text><text x="570" y="50" text-anchor="middle" class="t-m">local peer</text><line x1="570" y1="58" x2="570" y2="466" class="life"/><rect x="662" y="16" width="136" height="42" rx="5" class="box"/><text x="730" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node B1</text><text x="730" y="50" text-anchor="middle" class="t-m">other site</text><line x1="730" y1="58" x2="730" y2="466" class="life"/><rect x="812" y="16" width="136" height="42" rx="5" class="box"/><text x="880" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node B2</text><text x="880" y="50" text-anchor="middle" class="t-m">other site</text><line x1="880" y1="58" x2="880" y2="466" class="life"/><path d="M70 94 L230 94" class="req" marker-end="url(#q-req)"/><text x="150.0" y="88" text-anchor="middle" class="t-s">GET /images/{id}.jpg</text><path d="M230 124 L400 124" class="req" marker-end="url(#q-req)"/><text x="315.0" y="118" text-anchor="middle" class="t-s">miss → node service</text><rect x="275.0" y="136" width="250" height="40" rx="4" class="note"/><text x="400" y="154" text-anchor="middle" class="t-m">ID is 64 hex characters</text><text x="400" y="169" text-anchor="middle" class="t-m">one in-flight fetch per ID</text><path d="M400 204 L570 204" class="peer" marker-end="url(#q-peer)"/><text x="485.0" y="198" text-anchor="middle" class="t-s">GET /internal/images/{id}</text><path d="M570 234 L400 234" class="resp" marker-end="url(#q-resp)"/><text x="485.0" y="228" text-anchor="middle" class="t-s">404, or no answer in 50 ms</text><path d="M400 266 L730 266" class="wan" marker-end="url(#q-wan)"/><text x="650" y="260" text-anchor="middle" class="t-s">GET, in parallel</text><path d="M400 290 L880 290" class="wan" marker-end="url(#q-wan)"/><path d="M730 322 L400 322" class="resp" marker-end="url(#q-resp)"/><text x="650" y="316" text-anchor="middle" class="t-s">200 + bytes · first copy wins</text><rect x="275.0" y="334" width="250" height="40" rx="4" class="note"/><text x="400" y="352" text-anchor="middle" class="t-m">re-hash = {id} ✓ · fsync · rename</text><text x="400" y="367" text-anchor="middle" class="t-m">index row (now in A2's feed)</text><path d="M400 402 L70 402" class="resp" marker-end="url(#q-resp)"/><text x="235" y="396" text-anchor="middle" class="t-s">200 · Cache-Control: immutable</text><rect x="160.0" y="420" width="640" height="25" rx="4" class="note"/><text x="480" y="438" text-anchor="middle" class="t-m">every node answered "don't have it" → 404 · any node silent for the ~2 s budget → 503, never a guessed 404</text></svg></div>
+    <h3 id="figure-3" style="margin-top:22px">Figure 3 · A node restarts and catches up</h3>
+    <div class="diagram"><svg viewBox="0 0 960 500" role="img" aria-label="Recovery: node A2 restarts, deletes temp files and resolves pending index rows, passes health checks and serves reads at once, then reads its local peers' change feeds from the saved cursors and fetches missing images newest first with parallel workers, advancing the cursor only past fully stored images; site B is polled every 30 seconds by the nodes responsible for cross-site sync, and at once if no local peer is up."><rect x="42" y="16" width="136" height="42" rx="5" class="box"/><text x="110" y="34" text-anchor="middle" class="t-b" style="font-size:13px">LB · site A</text><text x="110" y="50" text-anchor="middle" class="t-m">health checks</text><line x1="110" y1="58" x2="110" y2="486" class="life"/><rect x="292" y="16" width="136" height="42" rx="5" class="box"/><text x="360" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node A2</text><text x="360" y="50" text-anchor="middle" class="t-m">restarting</text><line x1="360" y1="58" x2="360" y2="486" class="life"/><rect x="542" y="16" width="136" height="42" rx="5" class="box"/><text x="610" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Node A1</text><text x="610" y="50" text-anchor="middle" class="t-m">local peer(s)</text><line x1="610" y1="58" x2="610" y2="486" class="life"/><rect x="782" y="16" width="136" height="42" rx="5" class="box"/><text x="850" y="34" text-anchor="middle" class="t-b" style="font-size:13px">Site B</text><text x="850" y="50" text-anchor="middle" class="t-m">fallback only</text><line x1="850" y1="58" x2="850" y2="486" class="life"/><rect x="190.0" y="70" width="340" height="40" rx="4" class="note"/><text x="360" y="88" text-anchor="middle" class="t-m">1 · delete temp files · resolve pending index rows</text><text x="360" y="103" text-anchor="middle" class="t-m">(file present → stored · absent → drop row)</text><path d="M110 134 L360 134" class="req" marker-end="url(#q-req)"/><text x="235.0" y="128" text-anchor="middle" class="t-s">2 · health check → 200, back in rotation</text><rect x="210.0" y="146" width="300" height="40" rx="4" class="note"/><text x="360" y="164" text-anchor="middle" class="t-m">reads served at once: misses fetched</text><text x="360" y="179" text-anchor="middle" class="t-m">on demand (figure 2)</text><path d="M360 214 L610 214" class="peer" marker-end="url(#q-peer)"/><text x="485.0" y="208" text-anchor="middle" class="t-s">3 · GET /internal/changes?since={cursor}</text><path d="M610 244 L360 244" class="resp" marker-end="url(#q-resp)"/><text x="485.0" y="238" text-anchor="middle" class="t-s">items 41871…42870</text><path d="M360 278 L610 278" class="peer" marker-end="url(#q-peer)"/><text x="485.0" y="272" text-anchor="middle" class="t-s">4 · GET images · N workers · newest first</text><path d="M610 308 L360 308" class="resp" marker-end="url(#q-resp)"/><text x="485.0" y="302" text-anchor="middle" class="t-s">bytes · hash verified · fsync</text><rect x="195.0" y="320" width="330" height="40" rx="4" class="note"/><text x="360" y="338" text-anchor="middle" class="t-m">5 · adaptive throttle: full speed when quiet</text><text x="360" y="353" text-anchor="middle" class="t-m">6 · cursor → highest number with no gap below it</text><path d="M360 394 L850 394" class="wan" marker-end="url(#q-wan)"/><text x="605.0" y="388" text-anchor="middle" class="t-s">same loop across the WAN, every ~30 s on the responsible nodes</text><rect x="160.0" y="420" width="640" height="40" rx="4" class="note"/><text x="480" y="438" text-anchor="middle" class="t-m">lag reaches 0 → normal sync loop (pushes + feed polled every few seconds)</text><text x="480" y="453" text-anchor="middle" class="t-m">a node with a new, empty disk is the same case with every cursor at 0</text></svg></div>
+    <div class="legend">
+      <span><i style="border-color:var(--accent)"></i>request</span>
+      <span><i style="border-color:var(--sync);border-top-style:dashed"></i>inside a site (LAN)</span>
+      <span><i style="border-color:var(--wan);border-top-style:dotted;border-top-width:3px"></i>between full sites (WAN)</span>
+      <span><i style="border-color:var(--ok);border-top-style:dashed"></i>response</span>
+    </div>
+  </div>
+
+  <div class="callout sync">
+    <p><strong>One mechanism covers sync, recovery and new capacity.</strong> The change-feed loop also runs while everything is up, every few seconds against the local peers and every ~30 s against the other site, as a safety net for lost pushes. A new node or a rebuilt site is simply one whose cursors start at zero. The feed cannot skip anything: a node numbers an image only once the file is safely on disk, numbers are handed out one at a time, and a cursor only moves past images already stored. That's why there's no message broker and no separate recovery protocol.</p>
+  </div>
+
+  <div class="callout wan">
+    <p><strong>Design decision: when is an upload "done"?</strong> By default, after <strong>2 copies, preferring the local site</strong>. Confirmation takes milliseconds and doesn't depend on the link between sites. The cost: if a whole site is destroyed in the fraction of a second before its push to the other site completes, those few images are lost.</p>
+    <p>Uploaders that can't accept that can ask for <strong>one copy in the other full site</strong> before the <code>201</code>, per uploader, identified by its API key. That costs one round trip between sites (10–50 ms) per upload. Making it a per-uploader choice keeps the common case fast without hiding the trade-off. If the two sites are close together (<a href="CDN-Design-Details.html#infrastructure">details §3</a>), the cross-site round trip is cheap and confirming in both sites becomes the default.</p>
+  </div>
+  <p class="more">Detail: <a href="CDN-Design-Details.html#flows">§2 in the details file</a>: upload edge cases, sync between the sites, cache-only locations, why the change feed is correct, read on a miss. The <a href="CDN-Design-Details.html#api">API</a> is in details §9.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="architecture">
+  <h2><span class="n">3</span>Architecture</h2>
+  <p>Two full sites built the same way: identical nodes behind a load balancer, syncing over the fast local network, and syncing with the other site over the slower link, with each image crossing it once in sync. Cache locations sit in front of them and take no part in sync. The only coordination anywhere is nodes talking to each other over HTTP.</p>
+
+  <div class="callout">
+    <p><strong>The decision everything else depends on: an image's ID is the SHA-256 hash of its bytes.</strong> Images are never changed or deleted, so the image set only ever grows. Copies can never conflict, uploading the same image twice does nothing, any copy can be checked against its own name, and URLs can be cached forever. That last property is what makes cache-only locations so simple: a cached image can never be out of date.</p>
+    <p class="muted">Each node runs two processes: Nginx and a small Go service with a local SQLite index. Each full site adds a load balancer pair, each cache location is just Nginx, and GeoDNS routes users. There is no master, no central database, no message broker and no coordination service.</p>
+  </div>
+
+  <div class="card">
+    <div class="diagram">
+      <svg viewBox="0 0 960 480" role="img" aria-label="GeoDNS sends users to the nearest of two full sites or a cache-only location. Each full site has a load balancer pair and two nodes running Nginx, a Go service and a local disk; nodes sync over the local network and the two sites sync over the WAN. The cache location runs Nginx caches that fetch misses from the nearest full site.">
+        <defs>
+          <marker id="a-req" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-req"/></marker>
+          <marker id="a-peer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-peer"/></marker>
+          <marker id="a-wan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-wan"/></marker>
+        </defs>
+
+        <!-- GeoDNS -->
+        <rect x="230" y="14" width="500" height="58" rx="6" class="box"/>
+        <text x="480" y="38" text-anchor="middle" class="t-b">GeoDNS · cdn.example.com</text>
+        <text x="480" y="58" text-anchor="middle" class="t-s">resolves to the nearest healthy location · uploaders use the full sites only</text>
+
+        <path d="M370 72 L170 176" class="req" marker-end="url(#a-req)"/>
+        <path d="M480 72 L480 176" class="req" marker-end="url(#a-req)"/>
+        <path d="M650 72 L860 176" class="req" marker-end="url(#a-req)"/>
+
+        <g transform="translate(20 138)">
+            <rect x="0" y="0" width="280" height="300" rx="10" class="site"/>
+            <rect x="20" y="40" width="240" height="40" rx="5" class="box"/>
+            <text x="140" y="58" text-anchor="middle" class="t-b" style="font-size:13px">Load balancer pair</text>
+            <text x="140" y="73" text-anchor="middle" class="t-m">keepalived + HAProxy · 1 virtual IP</text>
+            <path d="M80 80 L76 116" class="req" marker-end="url(#a-req)"/>
+            <path d="M200 80 L204 116" class="req" marker-end="url(#a-req)"/>
+            <rect x="20" y="118" width="112" height="128" rx="7" class="node"/>
+            <text x="32" y="138" class="t-b" style="font-size:13px">Node</text>
+            <rect x="28" y="148" width="96" height="22" rx="3" class="part"/><text x="36" y="163" class="t-s">Nginx</text>
+            <rect x="28" y="176" width="96" height="22" rx="3" class="part"/><text x="36" y="191" class="t-s">Go service</text>
+            <rect x="28" y="204" width="96" height="30" rx="3" class="part"/><text x="36" y="217" class="t-s">Disk: files</text><text x="36" y="229" class="t-s">+ SQLite</text>
+            <rect x="148" y="118" width="112" height="128" rx="7" class="node"/>
+            <text x="160" y="138" class="t-b" style="font-size:13px">Node</text>
+            <rect x="156" y="148" width="96" height="22" rx="3" class="part"/><text x="164" y="163" class="t-s">Nginx</text>
+            <rect x="156" y="176" width="96" height="22" rx="3" class="part"/><text x="164" y="191" class="t-s">Go service</text>
+            <rect x="156" y="204" width="96" height="30" rx="3" class="part"/><text x="164" y="217" class="t-s">Disk: files</text><text x="164" y="229" class="t-s">+ SQLite</text>
+            <path d="M76 248 C76 276, 204 276, 204 248" class="peer" marker-start="url(#a-peer)" marker-end="url(#a-peer)"/>
+            <text x="140" y="290" text-anchor="middle" class="t-m">LAN sync</text>
+          </g>
+        <text x="36" y="162" class="t-b">Site A · full</text>
+        <g transform="translate(340 138)">
+            <rect x="0" y="0" width="280" height="300" rx="10" class="site"/>
+            <rect x="20" y="40" width="240" height="40" rx="5" class="box"/>
+            <text x="140" y="58" text-anchor="middle" class="t-b" style="font-size:13px">Load balancer pair</text>
+            <text x="140" y="73" text-anchor="middle" class="t-m">keepalived + HAProxy · 1 virtual IP</text>
+            <path d="M80 80 L76 116" class="req" marker-end="url(#a-req)"/>
+            <path d="M200 80 L204 116" class="req" marker-end="url(#a-req)"/>
+            <rect x="20" y="118" width="112" height="128" rx="7" class="node"/>
+            <text x="32" y="138" class="t-b" style="font-size:13px">Node</text>
+            <rect x="28" y="148" width="96" height="22" rx="3" class="part"/><text x="36" y="163" class="t-s">Nginx</text>
+            <rect x="28" y="176" width="96" height="22" rx="3" class="part"/><text x="36" y="191" class="t-s">Go service</text>
+            <rect x="28" y="204" width="96" height="30" rx="3" class="part"/><text x="36" y="217" class="t-s">Disk: files</text><text x="36" y="229" class="t-s">+ SQLite</text>
+            <rect x="148" y="118" width="112" height="128" rx="7" class="node"/>
+            <text x="160" y="138" class="t-b" style="font-size:13px">Node</text>
+            <rect x="156" y="148" width="96" height="22" rx="3" class="part"/><text x="164" y="163" class="t-s">Nginx</text>
+            <rect x="156" y="176" width="96" height="22" rx="3" class="part"/><text x="164" y="191" class="t-s">Go service</text>
+            <rect x="156" y="204" width="96" height="30" rx="3" class="part"/><text x="164" y="217" class="t-s">Disk: files</text><text x="164" y="229" class="t-s">+ SQLite</text>
+            <path d="M76 248 C76 276, 204 276, 204 248" class="peer" marker-start="url(#a-peer)" marker-end="url(#a-peer)"/>
+            <text x="140" y="290" text-anchor="middle" class="t-m">LAN sync</text>
+          </g>
+        <text x="356" y="162" class="t-b">Site B · full</text>
+
+        <!-- cache location -->
+        <g transform="translate(660 138)">
+          <rect x="0" y="0" width="280" height="300" rx="10" class="site"/>
+          <rect x="20" y="40" width="240" height="40" rx="5" class="box"/>
+          <text x="140" y="58" text-anchor="middle" class="t-b" style="font-size:13px">Another region</text>
+          <text x="140" y="73" text-anchor="middle" class="t-m">1–2 cache servers</text>
+          <path d="M140 80 L140 116" class="req" marker-end="url(#a-req)"/>
+          <rect x="40" y="118" width="200" height="96" rx="7" class="node"/>
+          <text x="56" y="140" class="t-b" style="font-size:13px">Cache server</text>
+          <rect x="52" y="150" width="176" height="22" rx="3" class="part"/><text x="62" y="165" class="t-s">Nginx proxy_cache</text>
+          <rect x="52" y="178" width="176" height="24" rx="3" class="part"/><text x="62" y="194" class="t-s">Disk: popular images</text>
+          <text x="140" y="240" text-anchor="middle" class="t-s">no sync · no uploads</text>
+          <text x="140" y="257" text-anchor="middle" class="t-s">evicts old images when full</text>
+        </g>
+        <text x="676" y="162" class="t-b">Cache-only location</text>
+
+        <!-- WAN between full sites -->
+        <path d="M302 320 L338 320" class="wan" marker-start="url(#a-wan)" marker-end="url(#a-wan)"/>
+        <!-- cache misses -->
+        <path d="M698 320 L624 320" class="req" marker-end="url(#a-req)"/>
+        <text x="661" y="306" text-anchor="middle" class="t-m">miss</text>
+
+        <text x="320" y="464" text-anchor="middle" class="t-m">WAN between full sites: each new image crosses once · catch-up after outages</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i style="border-color:var(--accent)"></i>client requests and cache misses</span>
+      <span><i style="border-color:var(--sync);border-top-style:dashed"></i>sync inside a site (LAN)</span>
+      <span><i style="border-color:var(--wan);border-top-style:dotted;border-top-width:3px"></i>sync between full sites (WAN)</span>
+    </div>
+  </div>
+
+  <h3 id="locations">Full sites and cache-only locations</h3>
+  <p>Locations play two different roles. <strong>Full sites</strong> are the source of truth and hold every image; this is where the exercise's sync requirements are met. <strong>Cache-only locations</strong> are cheap outposts that keep popular images near users in other regions.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>Full site (2)</th><th>Cache-only location (as many as needed)</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Role</td><td>Origin: the permanent home of every image</td><td>Edge: a temporary copy of what that region views</td></tr>
+        <tr><td class="k">Holds</td><td>Every image, on every node</td><td>Recently requested images only; old ones are evicted when the disk fills</td></tr>
+        <tr><td class="k">Takes part in sync and uploads</td><td>Yes</td><td>No. Fetches misses from the nearest full site.</td></tr>
+        <tr><td class="k">First view of an image in the region</td><td>Fast, served locally</td><td>Slower, fetched from a full site, possibly far away</td></tr>
+        <tr><td class="k">Full sites unreachable</td><td>Keeps serving everything</td><td>Serves only what it has cached</td></tr>
+        <tr><td class="k">Hardware</td><td>2+ nodes with full storage, load balancer pair</td><td>1–2 servers running Nginx, modest disk</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <span class="tag">Why 2 full sites, not 1</span>
+      <h3>Storage must survive losing a location</h3>
+      <p>A cache always needs an origin behind it. With a single full site, losing it would lose images that exist nowhere else, stop all uploads, and make every cache miss fail. With 2, either one can go down and the system keeps working. Two is the minimum; a third is a capacity decision (<a href="#assumptions">§4</a>).</p>
+    </div>
+    <div class="card">
+      <span class="tag">Why not only caches</span>
+      <h3>Caches are great for popular images, poor for rarely viewed ones</h3>
+      <p>With the retrieval pattern assumed in <a href="#assumptions">§4</a>, a cache serves about 90% of requests locally. If most images were viewed only once or twice, nearly every request would miss and travel to a full site anyway. Caches extend reach; they don't replace the origin.</p>
+    </div>
+  </div>
+  <p class="more">Detail: <a href="CDN-Design-Details.html#architecture">§3 in the details file</a>: routing and failover, fitting the on-premise infrastructure that exists, the component list. The ID scheme and its trade-offs are <a href="CDN-Design-Details.html#ids">details §7</a>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="assumptions">
+  <h2><span class="n">4</span>Assumptions and sizing</h2>
+  <p>The exercise leaves scale and usage open, so the design is checked at three scales, profiles S, M and L, and sized for M. These are planning numbers to confirm with the business, not facts.</p>
+  <ul>
+    <li><strong>Infrastructure:</strong> two full sites far enough apart to serve different regions, 10 GbE inside a site (25 GbE at profile L), a private link or VPN with 10–50 ms round trip between sites, no cloud. Fewer locations shrink the topology, not the software (<a href="CDN-Design-Details.html#infrastructure">details §3</a>).</li>
+    <li><strong>Users:</strong> public downloads from browsers and apps, about 60% near the full sites and 40% in other regions. Uploads come from internal services only and never from the internet.</li>
+    <li><strong>Images:</strong> JPEG, PNG, WebP, AVIF or GIF, about 500 KB on average, capped at 25 MB by the API (<a href="CDN-Design-Details.html#api">details §9</a>), never changed and never deleted. The dataset only grows.</li>
+    <li><strong>Traffic:</strong> photo-like. A few images get most of the views, mostly in their first days, so a cache in another region serves about 90% of its requests locally. Peaks are about 5× average, and everything is sized for peak.</li>
+  </ul>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>S · start</th><th class="base">M · target</th><th>L · growth</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="k">Daily active users</td><td class="num">~20k</td><td class="num base">~300k</td><td class="num">~3M</td></tr>
+        <tr><td class="k">Peak GETs/s, all locations</td><td class="num">~70</td><td class="num base">~1,000</td><td class="num">~10,000</td></tr>
+        <tr><td class="k">Peak egress <span class="muted" style="font-weight:400">(500 KB avg)</span></td><td class="num">35 MB/s</td><td class="num base">500 MB/s · 4 Gbit/s</td><td class="num">5 GB/s · 40 Gbit/s</td></tr>
+        <tr><td class="k">Uploads per day <span class="muted" style="font-weight:400">· peak per second</span></td><td class="num">2k · &lt;1/s</td><td class="num base">20k · ~2/s</td><td class="num">300k · ~20/s</td></tr>
+        <tr><td class="k">Storage after 4 years</td><td class="num">~1.5 TB</td><td class="num base">~14 TB</td><td class="num">~220 TB</td></tr>
+        <tr><td class="k">Full sites + cache locations</td><td class="num">2 + 0</td><td class="num base">2 + 2–3</td><td class="num">2–3 + one per user region</td></tr>
+        <tr><td class="k">Peak reaching full sites <span class="muted" style="font-weight:400">(after caches)</span></td><td class="num">~70 GETs/s</td><td class="num base">~640 GETs/s</td><td class="num">~6,400 GETs/s</td></tr>
+        <tr><td class="k">One full site, other one down</td><td class="num">~70 · 35 MB/s</td><td class="num base">~640 · 320 MB/s</td><td class="num">~6,400 · 3.2 GB/s</td></tr>
+        <tr><td class="k">Nodes per full site</td><td class="num">2</td><td class="num base">2</td><td class="num">4</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <p><strong>Why 2 nodes per full site:</strong> a site survives a server failure or upgrade, and every upload is confirmed on 2 nodes. With two full sites, <strong>each must carry all origin traffic alone</strong> while the other is down, so each keeps 100% spare capacity. That is affordable because caches absorb most of the traffic from other regions: at M the worst case is about 640 requests/s at one site, a light load for two servers. Storage never sets the node count: even at L, every node still holds every image on one dense storage server.</p>
+  </div>
+
+  <h3 id="sizing">Decision thresholds: what we add, and when</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Add</th><th>When</th><th>Why not earlier</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Cache location</td><td>A region has users more than ~50 ms from both full sites</td><td>One or two servers and no sync. Doesn't help users already near a full site.</td></tr>
+        <tr><td class="k">More nodes in a full site</td><td>One site, with one node down, can no longer carry all origin traffic with comfortable headroom</td><td>With a full copy on every node, more nodes add throughput and fault tolerance, not storage.</td></tr>
+        <tr><td class="k">Third full site</td><td>Keeping 100% spare capacity in each of two sites costs more than a third site would; or a region's traffic is large and mostly rarely viewed images; or the business wants a third permanent copy</td><td>Every full site multiplies storage and adds a sync target for every upload.</td></tr>
+        <tr><td class="k">Partial placement: each image on <em>k</em> nodes per site</td><td>Projected data reaches ~0.5 PB (≈80% of one dense server's ~600 TB usable), well beyond profile L</td><td>It breaks requirement 1 ("distributed to all cluster nodes"), so the business would have to agree to change the requirement. Until then, storage grows by adding disks, not by dropping copies.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="more">Detail: <a href="CDN-Design-Details.html#assumptions">§4 in the details file</a>: the retrieval pattern behind the numbers, what changes if the assumptions are wrong, how the numbers were derived, and what changes between S, M and L.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="failures">
+  <h2><span class="n">5</span>Failures and guarantees</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>What fails</th><th>What users see</th><th>What the system does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">One node</td><td>Nothing. The site's balancer removes it within seconds and the other node holds every image. Uploads still get their second copy, from the other site.</td><td>On restart it serves traffic at once and catches up from its local peers, newest images first. Catch-up takes seconds to minutes.</td></tr>
+        <tr><td class="k">A whole full site</td><td>Its users are routed to the other site within 1–2 minutes (DNS TTL plus health-check interval). Caches switch their misses there.</td><td>On return it catches up from the other site, each image crossing the link once, and users are routed back once health checks pass.</td></tr>
+        <tr><td class="k">A cache location</td><td>Its region is served by the nearest full site, more slowly.</td><td>The disk cache survives a restart. A replaced server warms up from traffic.</td></tr>
+        <tr><td class="k">Link between full sites</td><td>Each site keeps serving and accepting uploads; an upload that asked for cross-site durability gets <code>503</code> with <code>Retry-After</code> until the link returns. A miss for an image uploaded on the other side answers <code>503</code>, never a wrong <code>404</code>.</td><td>The change feed reconciles both directions when the link returns. Images are immutable, so there is nothing to merge.</td></tr>
+        <tr><td class="k">Node dies during an upload</td><td>The client gets an error and retries. Same bytes, same ID, so no duplicate.</td><td>Nothing to do.</td></tr>
+        <tr><td class="k">Disk lost</td><td>Nothing. The node serves what it has and fetches the rest on demand.</td><td>A full copy from the local peers over the LAN, about 3 h at M and 20 h at L for the full dataset over the LAN, while serving traffic.</td></tr>
+        <tr><td class="k">Silent disk corruption</td><td>At worst one corrupt file, until the re-hash catches it.</td><td>Every copy that moves between nodes is hash-checked, so corruption never spreads. A slow background re-hash finds bad local files and re-fetches them.</td></tr>
+        <tr><td class="k">Bug, operator mistake, ransomware</td><td>Bad data on both sites until it is restored from backup.</td><td>Two sites survive losing hardware, not bad data written everywhere. An off-site, write-once backup reads the change feed like a node (<a href="CDN-Design-Details.html#operations">details §8</a>).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>Consistency model: eventually consistent copies, but every read gives the right answer.</strong> After a <code>201</code>, a GET for that ID returns the exact bytes at every node at once and at every cache within 10 s (a cache repeats a <code>404</code> it gave in the previous 10 s), as long as one node holding the image is reachable. Otherwise it returns <code>503</code>, never a wrong <code>404</code>. The one exception is a file corrupted on a node's own disk, which the background re-hash catches. No consensus protocol is needed: the image set only grows and IDs are content hashes, so two nodes can never disagree about what an ID means.</p>
+  </div>
+
+  <p class="more">Detail: <a href="CDN-Design-Details.html#failures">§5 in the details file</a>: the three guarantees as a client sees them, and how the design behaves under viral images, bulk imports and abuse. How the guarantees are tested: <a href="CDN-Design-Details.html#testing">details §10</a>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="not-built">
+  <h2><span class="n">6</span>Tools we chose not to use (yet)</h2>
+  <p>Each of these is a reasonable choice a reviewer might expect in a CDN design. None is needed for the requirements at the target size, and each adds something to run, upgrade and debug at every location.</p>
+  <ul>
+    <li><strong>Message broker</strong> (NATS, Kafka): push plus the change feed already give fast delivery and exact catch-up. Add one when other systems want the event stream.</li>
+    <li><strong>Central metadata database:</strong> a single point of failure and a cross-site hop for every miss. Names and ownership belong in the application that uses the CDN.</li>
+    <li><strong>Distributed object store</strong> (Ceph, MinIO): built to spread data, not to copy everything everywhere. Far heavier than Nginx plus one small Go service per node.</li>
+    <li><strong>Commercial CDN:</strong> our cache servers do the same job on hardware we control. Reconsider when users appear where we have no hardware.</li>
+    <li><strong>BGP anycast:</strong> GeoDNS gives nearest-location routing without running BGP everywhere. Worth it when failover must take seconds.</li>
+    <li><strong>Hash-based placement:</strong> while every node holds everything, nothing needs placing. Reconsider past ~0.5 PB, if the business agrees to drop "every node has every image".</li>
+    <li><strong>Kubernetes:</strong> a few fixed, disk-heavy machines per location gain little from an orchestrator.</li>
+    <li><strong>Image resizing and format conversion:</strong> not asked for. Usually the biggest egress saving once mobile bandwidth matters.</li>
+  </ul>
+  <p class="more">Detail: <a href="CDN-Design-Details.html#not-built">§6 in the details file</a> says, for each tool, what would change the decision.</p>
+</section>
+
+<footer>Images CDN · Exercise 2 · Baseline sized for profile M (2 full sites × 2 nodes + cache-only locations). Supporting material: <a href="CDN-Design-Details.html">CDN-Design-Details.html</a>.</footer>
+
+</div>
+<a class="totop" href="#top" aria-label="Back to the start">&uarr; Top</a>
+<script>
+  (function () {
+    var b = document.querySelector('.totop');
+    function t() { b.hidden = window.scrollY < 400; }
+    b.addEventListener('click', function (e) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    window.addEventListener('scroll', t, { passive: true }); t();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["url-shortener/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["url-shortener/**", ".github/workflows/ci.yml"]
+
+# Exercise 1 lives in url-shortener/; every command below runs from there.
+defaults:
+  run:
+    working-directory: url-shortener
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]" -c constraints.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    services:
+      mongo:
+        image: mongo:7.0.43
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      SHORTENER_TEST_MONGO_URI: mongodb://localhost:27017
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]" -c constraints.txt
+      - run: pytest --cov --cov-report=term-missing --cov-fail-under=95
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install with ./install.sh (starts MongoDB, installs the CLI with uv or pipx)
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ./install.sh
+      - name: Smoke test the installed command
+        run: |
+          short=$(url-shortener --minify='https://www.example.com/path?q=search')
+          test "$(url-shortener --expand="$short")" = "https://www.example.com/path?q=search"
+      - if: always()
+        run: docker compose down -v
+
